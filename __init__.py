@@ -62,7 +62,7 @@ def fetch_hackatime():
         project_data.append(
             [project["name"], project["total_seconds"]]
         )  # a list [name, seconds]
-        time_worked_on += project["total_seconds"]
+        time_worked_on += int(project["total_seconds"])
 
     return project_data
 
@@ -204,16 +204,18 @@ def update():  # runs in a loop when the app is open
     time_bar.set_progress(get_percentage_to_event())
     time_bar.draw()
 
+    # Hackatime stuff
+    connect_wifi()  # connect to WiFi
+    projects_data = fetch_hackatime()  # fetch the projects
+
     # Hackatime text
-    hours_worked = time_worked_on / 3600
+    hours_worked = round(time_worked_on / 3600, 2)
     time_required_hours = TIME_REQUIRED / 3600
 
     screen.pen = color.black
     screen.text(f"{hours_worked} / {time_required_hours} hours", 30, 114)
 
     # Hackatime bar
-    connect_wifi()  # connect to WiFi
-    projects_data = fetch_hackatime()  # fetch the projects
     hackatime_bar.set_projects(projects_data)
     hackatime_bar.draw()
 
