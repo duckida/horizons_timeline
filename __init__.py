@@ -253,7 +253,9 @@ def update():  # runs in a loop when the app is open
     draw_gallery(5, 140, projects_data)
 
     badge.update()
-    wait_for_button_or_alarm(timeout=600 * 1000)  # 600 seconds
+
+    rtc.set_alarm(minutes=10)
+    wait_for_button_or_alarm(timeout=5000)
 
 
 run(update)
