@@ -6,12 +6,6 @@ import requests
 import wifi
 
 
-def connect_wifi():
-    wifi.connect()
-    while not wifi.is_connected():
-        time.sleep(0.2)
-
-
 # Event time functions
 def calculate_time_to_event():
     rtc_list = list(rtc.datetime())
@@ -51,17 +45,31 @@ TIME_REQUIRED = 20 * 60 * 60  # 20 hours in seconds
 
 def fetch_hackatime():
     global time_worked_on
+
+    # color choices for projects
+    grays = [
+        color.rgb(85, 85, 85),
+        color.rgb(192, 192, 192),
+        color.rgb(0, 0, 0),
+        color.rgb(128, 128, 128),
+    ]
+
+    # reset
     time_worked_on = 0
     project_data = []
 
     rq = requests.get(
-        f"https://hackatime.hackclub.com/api/v1/users/{HACKATIME_USERNAME}/projects/details?projects={HACKATIME_PROJECTS}",
+        f"http://hackatime.hackclub.com/api/v1/users/{HACKATIME_USERNAME}/projects/details?projects={HACKATIME_PROJECTS}",
     )
 
     for project in rq.json()["projects"]:
+        # pick a color to represent the project
+        color_choice = choice(grays)
+        grays.remove(color_choice)
+
         project_data.append(
-            [project["name"], project["total_seconds"]]
-        )  # a list [name, seconds]
+            [project["name"], project["total_seconds"], color_choice]
+        )  # a list [name, seconds, color]
         time_worked_on += int(project["total_seconds"])
 
     return project_data
@@ -122,10 +130,10 @@ class ProgressBar:
 class HackatimeProgressBar(ProgressBar):
     def __init__(self, top_left_corner_x, top_left_corner_y, width, height):
         super().__init__(top_left_corner_x, top_left_corner_y, width, height)
-        self.bar_shapes = []
+        self.project_bars = []
 
     def set_projects(self, project_data):
-        self.bar_shapes = []  # reset
+        self.project_bars = []  # reset
         projects_to_plot = []
         start_x = 0
 
@@ -134,15 +142,18 @@ class HackatimeProgressBar(ProgressBar):
 
             bar_width = self.fillable_width * percentage
 
-            self.bar_shapes.append(
-                shape.rounded_rectangle(
-                    self.top_left_x + start_x,
-                    self.top_left_y,
-                    bar_width,
-                    self.bar_height,
-                    self.RADIUS,
-                )
-            )
+            self.project_bars.append(
+                [
+                    shape.rectangle(
+                        self.top_left_x + start_x,
+                        self.top_left_y,
+                        bar_width,
+                        self.bar_height,
+                        # self.RADIUS,
+                    ),
+                    project[2],
+                ]
+            )  # a list [shape, color]
 
             start_x += bar_width
 
@@ -150,32 +161,49 @@ class HackatimeProgressBar(ProgressBar):
         screen.pen = color.white
         screen.shape(self.outline_fill)
 
+        for project in self.project_bars:
+            screen.pen = project[1]
+            screen.shape(project[0])
+            screen.dither()
+
         screen.pen = color.black
         screen.shape(self.outline)
 
-        grays = [
-            color.rgb(85, 85, 85),
-            color.rgb(192, 192, 192),
-            color.rgb(220, 220, 220),
-            color.rgb(128, 128, 128),
-            color.rgb(229, 228, 226),
-        ]
 
-        for shape in self.bar_shapes:
-            # Choose a random color
-            color_choice = choice(grays)
-            grays.remove(color_choice)
+def draw_gallery(x, y, projects):
+    BOX_SIZE = 9
+    OUTLINE_THICKNESS = 1
+    PADDING = 3
+    Y_GAP = 18
+    start_x = x
+    start_y = y
 
-            screen.pen = color_choice
+    for project in projects:
+        screen.pen = project[2]
+        color_box = shape.rectangle(start_x, start_y, BOX_SIZE, BOX_SIZE)
+        screen.shape(color_box)
 
-            screen.shape(shape)
-            screen.dither()
+        outline = color_box.stroke(OUTLINE_THICKNESS)
+        screen.pen = color.black
+        screen.shape(outline)
+
+        project_hours = round(project[1] / 3600, 2)
+        text = f"{project[0]} {project_hours}h"
+
+        screen.pen = color.black
+        screen.font = rom_font.kobold
+        screen.text(text, start_x + BOX_SIZE + PADDING, start_y)
+
+        text_width, _ = screen.measure_text(text)
+
+        start_x += BOX_SIZE + PADDING + text_width + PADDING
+        if start_x > 160:  # go to the next line
+            start_x = x
+            start_y += Y_GAP
 
 
-time_bar = ProgressBar((screen.width - 200) / 2, 80, 200, 20)
-hackatime_bar = HackatimeProgressBar((screen.width - 200) / 2, 130, 200, 20)
-
-badge.mode(FAST_UPDATE | NON_BLOCKING)
+time_bar = ProgressBar((screen.width - 200) / 2, 70, 200, 20)
+hackatime_bar = HackatimeProgressBar((screen.width - 200) / 2, 115, 200, 20)
 
 try:
     logo = image.load("/system/apps/horizons_timeline/assets/logo.png")
@@ -183,41 +211,46 @@ except:
     logo = image.rectangle(5, 5, 5, 5)
 
 
-def init():
-    connect_wifi()
+wifi.connect()
+while not wifi.is_connected():
+    time.sleep(0.2)
 
 
 def update():  # runs in a loop when the app is open
+    badge.mode(FAST_UPDATE | NON_BLOCKING)
+
     screen.pen = color.white
     screen.clear()
 
     # Horizons logo
-    screen.blit(logo, vec2(10, 10))
+    screen.blit(logo, vec2(10, 5))
 
     # Time text
     days, hours = calculate_time_to_event()
     screen.font = rom_font.nope
     screen.pen = color.black
-    screen.text(f"{days} days, {hours} hours left!", 30, 64)
+    screen.text(f"{days} days, {hours} hours left!", 30, 55)
 
     # Time bar
     time_bar.set_progress(get_percentage_to_event())
     time_bar.draw()
 
     # Hackatime stuff
-    connect_wifi()  # connect to WiFi
+    wifi.connect()
     projects_data = fetch_hackatime()  # fetch the projects
 
     # Hackatime text
     hours_worked = round(time_worked_on / 3600, 2)
     time_required_hours = TIME_REQUIRED / 3600
-
     screen.pen = color.black
-    screen.text(f"{hours_worked} / {time_required_hours} hours", 30, 114)
+    screen.text(f"{hours_worked} / {time_required_hours} hours", 30, 100)
 
     # Hackatime bar
     hackatime_bar.set_projects(projects_data)
     hackatime_bar.draw()
+
+    # Key
+    draw_gallery(5, 140, projects_data)
 
     badge.update()
     wait_for_button_or_alarm(timeout=600 * 1000)  # 600 seconds
