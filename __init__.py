@@ -217,7 +217,7 @@ while not wifi.is_connected():
 
 
 def update():  # runs in a loop when the app is open
-    badge.mode(FAST_UPDATE | NON_BLOCKING)
+    badge.mode(FAST_UPDATE)
 
     screen.pen = color.white
     screen.clear()
